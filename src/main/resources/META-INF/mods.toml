@@ -1,0 +1,19 @@
+modLoader = "javafml"
+loaderVersion = "[36,)"
+#issueTrackerURL = ""
+license = "LGPL-v3"
+
+[[mods]]
+modId = "fadescreen"
+version = "${version}"
+displayName = "FadeScreen"
+#logoFile = "logo.png"
+authors = "Kasualix"
+#credits = ""
+description = '''
+Fades every screen in and out with a real alpha transition instead of a black overlay.
+Screens are rendered offscreen and composited back with an animated alpha, so the world
+(or the previous screen) shows through while a screen opens or closes.
+Fade length and an opt-out screen list are configurable in config/fadescreen-client.toml.
+'''
+#logoFile = ""

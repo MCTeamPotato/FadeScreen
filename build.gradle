@@ -1,0 +1,139 @@
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
+import net.darkhax.curseforgegradle.UploadArtifact
+
+plugins {
+    id 'dev.architectury.loom' version '1.17-SNAPSHOT'
+    id "com.gradleup.shadow" version "8.3.9"
+    id 'net.darkhax.curseforgegradle' version '1.1.+'
+}
+
+boolean isNeo = loom.platform.get().displayName() == "NeoForge"
+boolean hasMixin = file("src/main/resources/${archives_name}.mixins.json").exists()
+boolean hasAccessTransformer = file("src/main/resources/META-INF/accesstransformer.cfg").exists()
+
+group = maven_group
+version = minecraft_version + "-" + mod_version
+
+base {
+    archivesName = archives_name
+}
+
+loom {
+    silentMojangMappingsLicense()
+
+    if (!isNeo) {
+        forge {
+            if (hasMixin) it.mixinConfig("${archives_name}.mixins.json")
+            
+            if (hasAccessTransformer) it.accessTransformer(file("src/main/resources/META-INF/accesstransformer.cfg"))
+            
+        }
+    }
+}
+
+repositories {
+    maven { url = 'https://files.minecraftforge.net/maven/' }
+    maven { url = 'https://maven.neoforged.net/releases' }
+    maven { url = 'https://maven.parchmentmc.org' }
+    maven { url = 'https://cursemaven.com' }
+}
+
+def versions = [
+        "1.20.1": [forge: "47.4.28", parchment: "2023.09.03", java: 17],
+        "1.21.1": [neo: "21.1.259",  parchment: "2024.11.17", java: 21]
+]
+
+def versionKeys = versions[minecraft_version]
+
+dependencies {
+    minecraft "net.minecraft:minecraft:${minecraft_version}"
+
+    mappings loom.layered {
+        officialMojangMappings()
+        parchment("org.parchmentmc.data:parchment-${minecraft_version}:${versionKeys.parchment}@zip")
+    }
+
+    if (!isNeo) {
+        forge "net.minecraftforge:forge:${minecraft_version}-${versionKeys.forge}"
+    } else {
+        neoForge "net.neoforged:neoforge:${versionKeys.neo}"
+    }
+
+    if (!isNeo && hasMixin) {
+        shadow(annotationProcessor("io.github.llamalad7:mixinextras-common:0.5.5"))
+    }
+}
+
+configurations {
+    shadow
+    implementation.extendsFrom(shadow)
+}
+
+shadowJar {
+    configurations = [project.configurations.shadow]
+    if (!isNeo && hasMixin) {
+        relocate "com.llamalad7.mixinextras", "me.kall.${archives_name}.mixinextras"
+    }
+    mergeServiceFiles()
+    archiveClassifier = "dev-shadow"
+    exclude "LICENSE_MixinExtras"
+}
+
+remapJar {
+    dependsOn tasks.named("shadowJar")
+    inputFile = shadowJar.archiveFile
+    archiveClassifier = null
+    exclude "LICENSE_MixinExtras"
+}
+
+processResources {
+    inputs.property 'version', project.version
+    if (isNeo) {
+        filesMatching('META-INF/neoforge.mods.toml') {
+            expand version: project.version
+        }
+        exclude("META-INF/mods.toml")
+    } else {
+        filesMatching('META-INF/mods.toml') {
+            expand version: project.version
+        }
+        exclude("META-INF/neoforge.mods.toml")
+    }
+}
+
+java {
+    withSourcesJar()
+
+    JavaVersion javaVersion = JavaVersion.toVersion(versionKeys.java)
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = versionKeys.java
+}
+
+String changelog = file("CHANGELOG.md").getText("UTF-8")
+
+tasks.register("publishCurseForge", TaskPublishCurseForge) {
+    if (project_id != "0") {
+        apiToken = System.getenv("CURSEFORGE_TOKEN")
+        it.disableVersionDetection()
+
+        UploadArtifact mainFile = it.upload(project_id, remapJar)
+        mainFile.displayName = "${archives_name}-${project.version}"
+        mainFile.releaseType = "release"
+        mainFile.changelog = changelog
+        mainFile.changelogType = "markdown"
+        mainFile.addEnvironment("Client")
+        mainFile.addModLoader(isNeo ? "NeoForge" : "Forge")
+        mainFile.addJavaVersion("Java ${versionKeys.java}")
+        mainFile.addGameVersion(minecraft_version)
+
+        UploadArtifact sourceFile = mainFile.withAdditionalFile(sourcesJar)
+        sourceFile.changelog = changelog
+        sourceFile.changelogType = "markdown"
+    } else {
+        System.out.println("CurseForge project ID not found")
+    }
+}

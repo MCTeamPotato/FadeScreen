@@ -1,0 +1,19 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+#issueTrackerURL = ""
+license = "LGPL-v3"
+
+[[mods]]
+modId = "fadescreen"
+version = "${version}"
+displayName = "FadeScreen"
+#logoFile = "logo.png"
+authors = "Kasualix"
+#credits = ""
+description = '''
+
+'''
+#logoFile = ""
+
+[[mixins]]
+config = "fadescreen.mixins.json"
