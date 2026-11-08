@@ -3,7 +3,7 @@ package me.kall.fadescreen.mixin;
 import me.kall.fadescreen.client.ScreenFader;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraftforge.client.ForgeHooksClient;
+import net.neoforged.neoforge.client.ClientHooks;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -17,8 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * there would composite the vanilla content and leave Modern UI's own drawing at full opacity
  * outside the fade.
  */
-@Mixin(ForgeHooksClient.class)
-public abstract class ForgeHooksClientMixin {
+@Mixin(ClientHooks.class)
+public abstract class ClientHooksMixin {
     @Inject(method = "drawScreen", at = @At("HEAD"))
     private static void fadescreen$beginScreen(Screen screen, GuiGraphics guiGraphics, int mouseX, int mouseY,
                                                float partialTick, CallbackInfo ci) {

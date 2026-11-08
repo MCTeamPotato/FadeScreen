@@ -3,7 +3,7 @@
 给后来改这个模组的人（包括我自己）：这里记的是**为什么这么写**、哪些地方一动就会坏、
 以及每个坑当时的表现和修法。改代码前先看第 2 节的不变量。
 
-- 目标版本：Forge 1.20.1（`gradle.properties` 里 `loom.platform = forge`，MC 1.20.1）
+- 目标版本：Forge 1.20.1（`gradle.properties` 里 `loom.platform = forge`，MC 1.20.1），其他版本均不确定行为是否一致。
 - 全部逻辑在客户端；`fadescreen.mixins.json` 的 `client` 列表里注册
 - 入口：[`FadeScreen.java`](src/main/java/me/kall/fadescreen/FadeScreen.java)（只注册客户端配置）
 
@@ -97,7 +97,7 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 | --- | --- |
 | [`ScreenFader.java`](src/main/java/me/kall/fadescreen/client/ScreenFader.java) | 全部渲染与状态机：[`onScreenChanged`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:67)、[`beginScreen`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:121)、[`endScreen`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:192)、[`afterGui`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:218)、[`captureGhost`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:349)、[`drawTexture`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:403) |
 | [`FadeConfig.java`](src/main/java/me/kall/fadescreen/client/FadeConfig.java) | `config/fadescreen-client.toml`（`enabled` / `durationMillis` / `skippedScreens`） |
-| [`ForgeHooksClientMixin.java`](src/main/java/me/kall/fadescreen/mixin/ForgeHooksClientMixin.java) | 包住 `drawScreen`（含 Pre/Post），离屏开始/结束 |
+| [`ClientHooksMixin.java`](src/main/java/me/kall/fadescreen/mixin/ForgeHooksClientMixin.java) | 包住 `drawScreen`（含 Pre/Post），离屏开始/结束 |
 | [`ScreenMixin.java`](src/main/java/me/kall/fadescreen/mixin/ScreenMixin.java) | `renderBackground` 返回后重绑离屏（MUI 兼容） |
 | [`MinecraftMixin.java`](src/main/java/me/kall/fadescreen/mixin/MinecraftMixin.java) | `setScreen` HEAD，安排过渡 |
 | [`GameRendererMixin.java`](src/main/java/me/kall/fadescreen/mixin/GameRendererMixin.java) | 在 `GuiGraphics.flush()` 之后画 ghost / 补窗口 alpha |

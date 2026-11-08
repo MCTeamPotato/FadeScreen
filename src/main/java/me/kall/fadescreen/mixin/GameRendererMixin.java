@@ -1,6 +1,7 @@
 package me.kall.fadescreen.mixin;
 
 import me.kall.fadescreen.client.ScreenFader;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -15,7 +16,7 @@ public abstract class GameRendererMixin {
      * a fading-out screen can be drawn on top when no screen is currently open.
      */
     @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphics;flush()V", shift = At.Shift.AFTER))
-    private void fadescreen$afterGui(float partialTick, long nanoTime, boolean renderLevel, CallbackInfo ci) {
+    private void fadescreen$afterGui(DeltaTracker deltaTracker, boolean renderLevel, CallbackInfo ci) {
         ScreenFader.afterGui();
     }
 }

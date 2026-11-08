@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -14,7 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraftforge.client.ForgeHooksClient;
+import net.neoforged.neoforge.client.ClientHooks;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL14;
 
@@ -117,7 +118,7 @@ public final class ScreenFader {
         fadePending = true;
     }
 
-    /** Called at the head of {@code ForgeHooksClient#drawScreen}; the screen renders into the offscreen target afterwards. */
+    /** Called at the head of {@code ClientHooks#drawScreen}; the screen renders into the offscreen target afterwards. */
     public static void beginScreen(GuiGraphics guiGraphics, Screen screen, int mouseX, int mouseY, float partialTick) {
         if (capturingGhost) {
             return;
@@ -188,7 +189,7 @@ public final class ScreenFader {
             contentTarget.bindWrite(true);
         }
     }
-    /** Called at the return of {@code ForgeHooksClient#drawScreen}; composites the screen with its current alpha. */
+    /** Called at the return of {@code ClientHooks#drawScreen}; composites the screen with its current alpha. */
     public static void endScreen(GuiGraphics guiGraphics, Screen screen) {
         if (nesting == 0) {
             // Rendered straight to the main target; count it so the next switch knows this
@@ -272,13 +273,12 @@ public final class ScreenFader {
         RenderSystem.setShader(GameRenderer::getPositionShader);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
-        BufferBuilder builder = Tesselator.getInstance().getBuilder();
-        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
-        builder.vertex(0.0F, height, 0.0F).endVertex();
-        builder.vertex(width, height, 0.0F).endVertex();
-        builder.vertex(width, 0.0F, 0.0F).endVertex();
-        builder.vertex(0.0F, 0.0F, 0.0F).endVertex();
-        Tesselator.getInstance().end();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
+        builder.addVertex(0.0F, height, 0.0F);
+        builder.addVertex(width, height, 0.0F);
+        builder.addVertex(width, 0.0F, 0.0F);
+        builder.addVertex(0.0F, 0.0F, 0.0F);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
 
         GlStateManager._colorMask(true, true, true, true);
         RenderSystem.enableBlend();
@@ -371,7 +371,7 @@ public final class ScreenFader {
             capturingGhost = true;
             graphics.pose().pushPose();
             try {
-                ForgeHooksClient.drawScreen(source, graphics, mouseX, mouseY, partialTick);
+                ClientHooks.drawScreen(source, graphics, mouseX, mouseY, partialTick);
             } finally {
                 graphics.pose().popPose();
                 capturingGhost = false;
@@ -428,13 +428,12 @@ public final class ScreenFader {
         RenderSystem.disableCull();
         RenderSystem.disableScissor();
 
-        BufferBuilder builder = Tesselator.getInstance().getBuilder();
-        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        builder.vertex(0.0F, height, 0.0F).uv(0.0F, 0.0F).endVertex();
-        builder.vertex(width, height, 0.0F).uv(1.0F, 0.0F).endVertex();
-        builder.vertex(width, 0.0F, 0.0F).uv(1.0F, 1.0F).endVertex();
-        builder.vertex(0.0F, 0.0F, 0.0F).uv(0.0F, 1.0F).endVertex();
-        Tesselator.getInstance().end();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        builder.addVertex(0.0F, height, 0.0F).setUv(0.0F, 0.0F);
+        builder.addVertex(width, height, 0.0F).setUv(1.0F, 0.0F);
+        builder.addVertex(width, 0.0F, 0.0F).setUv(1.0F, 1.0F);
+        builder.addVertex(0.0F, 0.0F, 0.0F).setUv(0.0F, 1.0F);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
 
         GlStateManager._colorMask(true, true, true, true);
         RenderSystem.enableBlend();

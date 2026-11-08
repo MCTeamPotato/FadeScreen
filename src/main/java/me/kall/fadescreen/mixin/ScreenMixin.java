@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
     @Inject(method = "renderBackground", at = @At("RETURN"))
-    private void fadescreen$afterBackground(GuiGraphics guiGraphics, CallbackInfo ci) {
+    private void fadescreen$afterBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         ScreenFader.rebindTargetIfCapturing();
     }
 }
