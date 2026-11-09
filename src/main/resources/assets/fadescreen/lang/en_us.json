@@ -1,0 +1,10 @@
+{
+  "fadescreen.options.page": "Fade Screen",
+  "fadescreen.options.enabled": "Enable fading",
+  "fadescreen.options.enabled.tooltip": "Fade screens in and out with an alpha transition instead of a black overlay.",
+  "fadescreen.options.duration": "Fade duration",
+  "fadescreen.options.duration.tooltip": "Length of the cross-fade in milliseconds. 0 disables the animation.",
+  "fadescreen.options.duration.value": "%s ms",
+  "fadescreen.options.low_res": "Low-resolution fade",
+  "fadescreen.options.low_res.tooltip": "Render the offscreen fade copy at GUI-scaled resolution. Saves VRAM on 4K displays, but text is slightly softer while fading."
+}

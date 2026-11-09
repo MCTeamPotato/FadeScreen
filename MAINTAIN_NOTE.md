@@ -114,6 +114,7 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 | 过渡时黑描边外出现白色点状边线 | FBO alpha 不是覆盖率，预乘合成把 RGB 直接加起来 | 常量 alpha 合成（第 2 节第 1 条） |
 | 界面打开有淡出没淡入 / 卡顿后没有淡入 | 时间轴记在 `setScreen`，首帧来晚就被吃掉 | 时间轴移到首帧 |
 | 装 Modern UI 后 ESC / 视频设置无淡入，关界面无淡出 | MUI 的 `BlurHandler` 重绑主帧缓冲；其内容在 Render.Post 提交 | `ScreenMixin` 重绑 + 注入点改 `drawScreen` |
+| 进 ModernEmb 重构的视频设置界面闪烁，时长越长闪得越多 | MUI 的 `SimpleScreen`/`UIManager.render` 直接把整屏画到主目标（显式绑定 `getMainRenderTarget`），离屏拷贝只拿到部分帧，合成与 MUI 的提交竞争；`renderBackground` 也不经过，`ScreenMixin` 兜不住 | 识别 `icyllis.modernui.mc.MuiScreen`，整屏跳过（不排过渡、不画 ghost），见 `ScreenFader.isModernUiScreen` |
 | `run/config` 里改成 3000ms 但没生效 | 配置是启动时读的 | 改完重启 |
 
 ---
@@ -126,6 +127,8 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 - **Modern UI 3.12.0.1** 的关键行为：
   - 界面是真正的 `Screen`（`MuiScreen` + `createScreen`），会走 `Minecraft#setScreen`；
   - `BlurHandler.drawScreenBackground` 会 `getMainRenderTarget().bindWrite(true)`，且不还原；
+  - `SimpleScreen#render` 不调用 `renderBackground`，而是 `UIManager.render` 显式绑定主目标画整屏 →
+    离屏合成无法覆盖它，所以 MUI 界面（`MuiScreen`）整体跳过过渡；
   - 有一套界面黑名单，黑名单里的界面不走模糊（所以资源包界面一直正常，可以作为对照）。
 - 任何在 `renderBackground` 里重绑 framebuffer 的 mod，都会因为第 2 节第 7 条被兜住。
 - 本项目 `build.gradle` 里还挂着 MixinExtras 的 shadow/relocate，但当前代码**没有用到**它；

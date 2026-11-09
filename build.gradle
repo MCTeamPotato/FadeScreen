@@ -36,10 +36,11 @@ repositories {
     maven { url = 'https://maven.neoforged.net/releases' }
     maven { url = 'https://maven.parchmentmc.org' }
     maven { url = 'https://cursemaven.com' }
+    maven { url = 'https://maven.blamejared.com' }
 }
 
 def versions = [
-        "1.20.1": [forge: "47.4.28", parchment: "2023.09.03", java: 17],
+        "1.20.1": [forge: "47.4.28", parchment: "2023.09.03", java: 17, embeddium: "0.3.31-beta.53"],
         "1.21.1": [neo: "21.1.259",  parchment: "2024.11.17", java: 21]
 ]
 
@@ -59,8 +60,9 @@ dependencies {
         neoForge "net.neoforged:neoforge:${versionKeys.neo}"
     }
 
-    if (!isNeo && hasMixin) {
-        shadow(annotationProcessor("io.github.llamalad7:mixinextras-common:0.5.5"))
+    // Optional Embeddium integration: compile and dev-runtime only, never bundled into the jar.
+    if (!isNeo && versionKeys.embeddium != null) {
+        modImplementation("org.embeddedt:embeddium-${minecraft_version}:${versionKeys.embeddium}+mc${minecraft_version}")
     }
 }
 
@@ -71,9 +73,6 @@ configurations {
 
 shadowJar {
     configurations = [project.configurations.shadow]
-    if (!isNeo && hasMixin) {
-        relocate "com.llamalad7.mixinextras", "me.kall.${archives_name}.mixinextras"
-    }
     mergeServiceFiles()
     archiveClassifier = "dev-shadow"
     exclude "LICENSE_MixinExtras"
