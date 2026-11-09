@@ -23,6 +23,12 @@ public final class FadeConfig {
                     "while the new one fades in. 0 disables the animation.")
             .defineInRange("durationMillis", 320, 0, 3000);
 
+    public static final ModConfigSpec.BooleanValue LOW_RES_TRANSITION = BUILDER
+            .comment("Render the offscreen fade copy at GUI-scaled resolution instead of physical",
+                    "resolution. Saves a lot of VRAM on 4K displays, but text is slightly softer",
+                    "for the duration of the fade. Off by default because the softening is visible.")
+            .define("lowResTransition", false);
+
     public static final ModConfigSpec.ConfigValue<List<? extends String>> SKIPPED = BUILDER
             .comment("Fully qualified screen class names that should never fade, e.g.",
                     "\"net.minecraft.client.gui.screens.LevelLoadingScreen\"")
@@ -30,10 +36,21 @@ public final class FadeConfig {
 
     public static final ModConfigSpec SPEC = BUILDER.build();
 
+    private static final List<? extends String> NO_SKIPPED = List.of();
     private static final Set<String> SKIPPED_CACHE = new ObjectOpenHashSet<>();
-    private static int skippedSize = -1;
+    /** The list instance the cache was built from; config reload hands back a new instance. */
+    private static List<? extends String> cachedSkipped = NO_SKIPPED;
 
     private FadeConfig() {
+    }
+
+    /** Persists pending changes immediately; Sodium calls this when the user applies edits. */
+    public static void save() {
+        // NeoForge writes the file and fires the reloading event in one go, so no ModConfig
+        // reference has to be captured from the mod bus first.
+        if (SPEC.isLoaded()) {
+            SPEC.save();
+        }
     }
 
     public static boolean enabled() {
@@ -44,12 +61,36 @@ public final class FadeConfig {
         return SPEC.isLoaded() ? DURATION.get() : 200L;
     }
 
+    public static boolean lowResTransition() {
+        return SPEC.isLoaded() && LOW_RES_TRANSITION.get();
+    }
+
+    public static void setEnabled(boolean value) {
+        if (SPEC.isLoaded()) {
+            ENABLED.set(value);
+        }
+    }
+
+    public static void setDurationMillis(int millis) {
+        if (SPEC.isLoaded()) {
+            DURATION.set(millis);
+        }
+    }
+
+    public static void setLowResTransition(boolean value) {
+        if (SPEC.isLoaded()) {
+            LOW_RES_TRANSITION.set(value);
+        }
+    }
+
     public static boolean isSkipped(String className) {
-        List<? extends String> list = SPEC.isLoaded() ? SKIPPED.get() : List.of();
-        if (list.size() != skippedSize) {
+        List<? extends String> list = SPEC.isLoaded() ? SKIPPED.get() : NO_SKIPPED;
+        // Rebuild on any reload, not just when the entry count changes: replacing one class
+        // name with another keeps the size identical but must still refresh the cache.
+        if (list != cachedSkipped) {
             SKIPPED_CACHE.clear();
             SKIPPED_CACHE.addAll(list);
-            skippedSize = list.size();
+            cachedSkipped = list;
         }
         return SKIPPED_CACHE.contains(className);
     }

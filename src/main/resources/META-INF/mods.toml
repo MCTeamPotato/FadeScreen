@@ -17,3 +17,11 @@ Screens are rendered offscreen and composited back with an animated alpha, so th
 Fade length and an opt-out screen list are configurable in config/fadescreen-client.toml.
 '''
 #logoFile = ""
+
+# Optional: adds a FadeScreen page to Embeddium's video options screen when it is installed.
+[[dependencies.fadescreen]]
+    modId = "embeddium"
+    mandatory = false
+    versionRange = "[0.3.0,)"
+    ordering = "NONE"
+    side = "CLIENT"

@@ -18,6 +18,21 @@ base {
     archivesName = archives_name
 }
 
+// The optional video-options integration is written against whichever mod ships on this
+// platform (Embeddium on 1.20.1, Sodium on 1.21.1). Both sources live in the tree so the
+// branches stay mergeable, but only the one matching the current platform is compiled.
+sourceSets {
+    main {
+        java {
+            if (isNeo) {
+                exclude "me/kall/fadescreen/compat/embeddium/**"
+            } else {
+                exclude "me/kall/fadescreen/compat/sodium/**"
+            }
+        }
+    }
+}
+
 loom {
     silentMojangMappingsLicense()
 
@@ -36,11 +51,13 @@ repositories {
     maven { url = 'https://maven.neoforged.net/releases' }
     maven { url = 'https://maven.parchmentmc.org' }
     maven { url = 'https://cursemaven.com' }
+    maven { url = 'https://maven.blamejared.com' }
+    maven { url = 'https://maven.caffeinemc.net/releases' }
 }
 
 def versions = [
-        "1.20.1": [forge: "47.4.28", parchment: "2023.09.03", java: 17],
-        "1.21.1": [neo: "21.1.259",  parchment: "2024.11.17", java: 21]
+        "1.20.1": [forge: "47.4.28", parchment: "2023.09.03", java: 17, embeddium: "0.3.31-beta.53"],
+        "1.21.1": [neo: "21.1.259",  parchment: "2024.11.17", java: 21, sodium: "0.8.13+mc1.21.1"]
 ]
 
 def versionKeys = versions[minecraft_version]
@@ -59,8 +76,14 @@ dependencies {
         neoForge "net.neoforged:neoforge:${versionKeys.neo}"
     }
 
-    if (!isNeo && hasMixin) {
-        shadow(annotationProcessor("io.github.llamalad7:mixinextras-common:0.5.5"))
+    // Optional Embeddium integration (1.20.1 only): compile and dev-runtime only, never bundled.
+    if (!isNeo && versionKeys.embeddium != null) {
+        modImplementation("org.embeddedt:embeddium-${minecraft_version}:${versionKeys.embeddium}+mc${minecraft_version}")
+    }
+
+    // Optional Sodium integration (1.21.1+): the API artifact is enough to compile against.
+    if (isNeo && versionKeys.sodium != null) {
+        implementation("net.caffeinemc:sodium-neoforge-api:${versionKeys.sodium}")
     }
 }
 
@@ -71,9 +94,6 @@ configurations {
 
 shadowJar {
     configurations = [project.configurations.shadow]
-    if (!isNeo && hasMixin) {
-        relocate "com.llamalad7.mixinextras", "me.kall.${archives_name}.mixinextras"
-    }
     mergeServiceFiles()
     archiveClassifier = "dev-shadow"
     exclude "LICENSE_MixinExtras"

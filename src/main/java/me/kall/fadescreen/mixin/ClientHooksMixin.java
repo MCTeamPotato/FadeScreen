@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Wraps the whole Forge screen draw, not just {@code Screen#renderWithTooltip}.
+ * Wraps the whole modded screen draw, not just {@code Screen#renderWithTooltip}.
  * <p>
  * Screens replaced by Modern UI (pause menu, video settings, ...) submit their geometry from
  * {@code ScreenEvent.Render.Post}, which fires after {@code renderWithTooltip} returns. Hooking

@@ -1,0 +1,10 @@
+{
+  "fadescreen.options.page": "渐幕",
+  "fadescreen.options.enabled": "启用淡入淡出",
+  "fadescreen.options.enabled.tooltip": "界面切换时使用透明度过渡，而不是黑色遮罩。",
+  "fadescreen.options.duration": "过渡时长",
+  "fadescreen.options.duration.tooltip": "交叉淡入淡出的时长（毫秒）。设为 0 可关闭动画。",
+  "fadescreen.options.duration.value": "%s 毫秒",
+  "fadescreen.options.low_res": "低分辨率过渡",
+  "fadescreen.options.low_res.tooltip": "离屏过渡副本按 GUI 缩放分辨率渲染。可节省 4K 显存，但过渡期间文字会略糊。"
+}

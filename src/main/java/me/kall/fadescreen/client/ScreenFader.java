@@ -36,6 +36,8 @@ public final class ScreenFader {
     private static RenderTarget ghostTarget;
 
     private static boolean contentValid;
+    /** The screen whose frame currently sits in {@link #contentTarget}. */
+    private static Screen cachedScreen;
     private static boolean ghostVisible;
     private static float ghostStrength = 1.0F;
     private static Screen pendingGhost;
@@ -80,10 +82,29 @@ public final class ScreenFader {
             fadePending = false;
             pendingGhost = null;
             ghostVisible = false;
+            contentValid = false;
+            cachedScreen = null;
             return;
         }
         if (next != null) {
             firstScreenSeen = true;
+        }
+
+        // Modern UI submits its whole screen to the main target through its own UI manager
+        // (SimpleScreen/UIManager), so the offscreen copy only ever sees a partial frame.
+        // Compositing that copy - plus a ghost on top - races with Modern UI's own submit and
+        // flickers, the longer the fade the more visible it gets. Leave these screens alone.
+        // Checked before the retarget path so a same-tick chain ending in a Modern UI screen
+        // cannot leave a ghost scheduled on top of it.
+        if (isModernUiScreen(next)) {
+            pendingGhost = null;
+            ghostVisible = false;
+            fadePending = false;
+            fadeStart = -1L;
+            contentValid = false;
+            cachedScreen = null;
+            renderedFrames = 0;
+            return;
         }
 
         // The outgoing screen may have been replaced before it was ever drawn: creative mode
@@ -135,7 +156,10 @@ public final class ScreenFader {
         // Nothing is composited, so there is no chance of the fade path altering a static screen.
         boolean composite = needsComposite();
         if (!composite) {
-            contentValid = false;
+            // The last frame rendered into the offscreen copy is still there. Keep it usable as
+            // a ghost source, but only while it actually belongs to this screen: then the next
+            // swap copies the texture instead of re-rendering the outgoing screen.
+            contentValid = cachedScreen == screen;
             return;
         }
 
@@ -209,6 +233,7 @@ public final class ScreenFader {
         guiGraphics.flush();
         minecraft.getMainRenderTarget().bindWrite(true);
         contentValid = true;
+        cachedScreen = screen;
 
         drawTexture(contentTarget.getColorTextureId(), currentAlpha(), false);
         composited = true;
@@ -236,6 +261,12 @@ public final class ScreenFader {
             float alpha = ghostStrength * (1.0F - currentAlpha());
             if (alpha <= 0.002F) {
                 ghostVisible = false;
+                // A closed screen is no longer a valid ghost source, and dropping the reference
+                // lets its resources be collected instead of lingering in the cache.
+                if (minecraft.screen == null) {
+                    contentValid = false;
+                    cachedScreen = null;
+                }
             } else {
                 minecraft.getMainRenderTarget().bindWrite(true);
                 drawTexture(ghostTarget.getColorTextureId(), alpha, false);
@@ -286,8 +317,42 @@ public final class ScreenFader {
     }
 
     private static boolean isFadable(Screen screen) {
-        return screen != null && FadeConfig.enabled() && !FadeConfig.isSkipped(screen.getClass().getName());
+        return screen != null && FadeConfig.enabled()
+                && !FadeConfig.isSkipped(screen.getClass().getName())
+                && !isModernUiScreen(screen);
     }
+
+    /**
+     * Modern UI screens implement {@code icyllis.modernui.mc.MuiScreen} and draw through
+     * {@code UIManager}, which binds the main render target directly. Detected by name so the
+     * mod keeps working without Modern UI on the classpath.
+     */
+    private static boolean isModernUiScreen(@Nullable Screen screen) {
+        return screen != null && IS_MODERN_UI.get(screen.getClass());
+    }
+
+    private static final String MODERN_UI_SCREEN = "icyllis.modernui.mc.MuiScreen";
+
+    private static final ClassValue<Boolean> IS_MODERN_UI = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+                if (implementsModernUi(c.getInterfaces())) {
+                    return Boolean.TRUE;
+                }
+            }
+            return Boolean.FALSE;
+        }
+
+        private boolean implementsModernUi(Class<?>[] interfaces) {
+            for (Class<?> i : interfaces) {
+                if (MODERN_UI_SCREEN.equals(i.getName()) || implementsModernUi(i.getInterfaces())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
 
     /* ------------------------------------------------------------------ alpha */
 
@@ -317,8 +382,19 @@ public final class ScreenFader {
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private static boolean ensureTargets(Minecraft minecraft) {
         Window window = minecraft.getWindow();
-        int width = window.getWidth();
-        int height = window.getHeight();
+        // Physical resolution by default: the GUI (text included) is rasterised at device pixels,
+        // and rendering into a GUI-scaled target then upscaling softens glyphs during the fade.
+        // The low-resolution path is opt-in for players who would rather trade that softness for
+        // the much smaller 4K VRAM footprint.
+        int width;
+        int height;
+        if (FadeConfig.lowResTransition()) {
+            width = window.getGuiScaledWidth();
+            height = window.getGuiScaledHeight();
+        } else {
+            width = window.getWidth();
+            height = window.getHeight();
+        }
         if (width <= 0 || height <= 0) return false;
 
         if (contentTarget == null) {
@@ -330,6 +406,7 @@ public final class ScreenFader {
             contentTarget.resize(width, height, false);
             contentTarget.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
             contentValid = false;
+            cachedScreen = null;
         }
 
         if (ghostTarget == null) {

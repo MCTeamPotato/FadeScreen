@@ -3,7 +3,8 @@
 给后来改这个模组的人（包括我自己）：这里记的是**为什么这么写**、哪些地方一动就会坏、
 以及每个坑当时的表现和修法。改代码前先看第 2 节的不变量。
 
-- 目标版本：Forge 1.20.1（`gradle.properties` 里 `loom.platform = forge`，MC 1.20.1），其他版本均不确定行为是否一致。
+- 目标版本：本文写的是 **NeoForge 1.21.1** 分支（`gradle.properties` 里 `loom.platform = neoForge`，MC 1.21.1）；
+  1.20.1 的 Forge 分支共用同一份源码树，平台差异见第 5 节。
 - 全部逻辑在客户端；`fadescreen.mixins.json` 的 `client` 列表里注册
 - 入口：[`FadeScreen.java`](src/main/java/me/kall/fadescreen/FadeScreen.java)（只注册客户端配置）
 
@@ -20,11 +21,11 @@ Minecraft#setScreen
   └─ ScreenFader.onScreenChanged(prev, next)
        记录是否要做过渡（fadePending）、上一屏要不要做 ghost
 
-ForgeHooksClient#drawScreen（每帧）
+ClientHooks#drawScreen（每帧）
   ├─ HEAD   → beginScreen()
   │            needsComposite? 否 → 直接返回，界面照常画到主画面（直通）
   │            是 → 需要时先 captureGhost()，再把 content FBO 清空并绑定
-  ├─ ...    → 界面正常渲染（包含 Forge 的 ScreenEvent.Render.Pre / Post）
+  ├─ ...    → 界面正常渲染（包含 NeoForge 的 ScreenEvent.Render.Pre / Post）
   └─ RETURN → endScreen()
                 flush → 绑回主画面 → 用常量 alpha 合成 content FBO
 
@@ -67,7 +68,7 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 
 5. **同一帧里被替换掉的界面要 retarget，不要取消过渡。**
    创造模式按 E 会先 `InventoryScreen` 再换成 `CreativeModeInventoryScreen`；
-   Embeddium 会先 `SodiumOptionsGUI` 再换成 `EmbeddiumVideoOptionsScreen`。
+   1.20.1 的 Embeddium 会先 `SodiumOptionsGUI` 再换成 `EmbeddiumVideoOptionsScreen`。
    旧界面从没显示过 → 不需要 ghost，但**新界面必须继续淡入**。
    （`previousPresented` / `renderedFrames`，见 [`onScreenChanged`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:67)）
 
@@ -83,11 +84,11 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 8. **重入保护。**
    - `nesting`：界面里再渲染界面时只允许最外层做事；
    - `capturingGhost`：重渲染上一屏时不要再进入一次捕获；
-   - `ScreenMixin` 里的重渲染走的是 `ForgeHooksClient.drawScreen`，会被上面的标志挡住。
+   - `ScreenMixin` 里的重渲染走的是 `ClientHooks.drawScreen`，会被上面的标志挡住。
 
-9. **合成窗口要包住 Forge 的 Render.Pre/Post。**
+9. **合成窗口要包住 NeoForge 的 Render.Pre/Post。**
    MUI 这类界面会在 `ScreenEvent.Render.Post` 提交几何体，而 Post 在 `Screen#renderWithTooltip` 返回之后。
-   → 注入点选 `ForgeHooksClient#drawScreen`（HEAD/RETURN），不要退回 `renderWithTooltip`。
+   → 注入点选 `ClientHooks#drawScreen`（HEAD/RETURN），不要退回 `renderWithTooltip`。
 
 ---
 
@@ -96,11 +97,13 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 | 文件 | 职责 |
 | --- | --- |
 | [`ScreenFader.java`](src/main/java/me/kall/fadescreen/client/ScreenFader.java) | 全部渲染与状态机：[`onScreenChanged`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:67)、[`beginScreen`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:121)、[`endScreen`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:192)、[`afterGui`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:218)、[`captureGhost`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:349)、[`drawTexture`](src/main/java/me/kall/fadescreen/client/ScreenFader.java:403) |
-| [`FadeConfig.java`](src/main/java/me/kall/fadescreen/client/FadeConfig.java) | `config/fadescreen-client.toml`（`enabled` / `durationMillis` / `skippedScreens`） |
-| [`ClientHooksMixin.java`](src/main/java/me/kall/fadescreen/mixin/ForgeHooksClientMixin.java) | 包住 `drawScreen`（含 Pre/Post），离屏开始/结束 |
+| [`FadeConfig.java`](src/main/java/me/kall/fadescreen/client/FadeConfig.java) | `config/fadescreen-client.toml`（`enabled` / `durationMillis` / `lowResTransition` / `skippedScreens`） |
+| [`ClientHooksMixin.java`](src/main/java/me/kall/fadescreen/mixin/ClientHooksMixin.java) | 包住 `ClientHooks#drawScreen`（含 Pre/Post），离屏开始/结束 |
 | [`ScreenMixin.java`](src/main/java/me/kall/fadescreen/mixin/ScreenMixin.java) | `renderBackground` 返回后重绑离屏（MUI 兼容） |
 | [`MinecraftMixin.java`](src/main/java/me/kall/fadescreen/mixin/MinecraftMixin.java) | `setScreen` HEAD，安排过渡 |
 | [`GameRendererMixin.java`](src/main/java/me/kall/fadescreen/mixin/GameRendererMixin.java) | 在 `GuiGraphics.flush()` 之后画 ghost / 补窗口 alpha |
+| [`SodiumIntegration.java`](src/main/java/me/kall/fadescreen/compat/sodium/SodiumIntegration.java) | 给 Sodium 视频设置界面插一页（1.21.1，`@ConfigEntryPointForge`） |
+| [`EmbeddiumIntegration.java`](src/main/java/me/kall/fadescreen/compat/embeddium/EmbeddiumIntegration.java) | 给 Embeddium 视频设置界面插一页（1.20.1，`OptionGUIConstructionEvent`） |
 
 ---
 
@@ -110,27 +113,38 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 | --- | --- | --- |
 | 首次进游戏 TitleScreen 闪一下，Logo 有白边 | 我们自己又淡入了一遍，和原版 fade 叠加；半透明时透出早期加载画面 | 首屏跳过 + 主目标 alpha 不写低 |
 | 屏幕淡入时整个窗口变透明，透出桌面/加载画面 | 合成把主画面 alpha 写成了 0.3 之类 | 合成只写 RGB + 每帧 `makeWindowOpaque()` |
-| 打开背包 / Embeddium 视频设置不淡入 | 同一帧内 `setScreen` 被调用两次，旧界面一帧都没显示过 | 改为 retarget，保留已排好的过渡 |
+| 打开背包 / 视频设置不淡入 | 同一帧内 `setScreen` 被调用两次，旧界面一帧都没显示过 | 改为 retarget，保留已排好的过渡 |
 | 过渡时黑描边外出现白色点状边线 | FBO alpha 不是覆盖率，预乘合成把 RGB 直接加起来 | 常量 alpha 合成（第 2 节第 1 条） |
 | 界面打开有淡出没淡入 / 卡顿后没有淡入 | 时间轴记在 `setScreen`，首帧来晚就被吃掉 | 时间轴移到首帧 |
 | 装 Modern UI 后 ESC / 视频设置无淡入，关界面无淡出 | MUI 的 `BlurHandler` 重绑主帧缓冲；其内容在 Render.Post 提交 | `ScreenMixin` 重绑 + 注入点改 `drawScreen` |
+| 进 ModernEmb 重构的视频设置界面闪烁，时长越长闪得越多 | MUI 的 `SimpleScreen`/`UIManager.render` 直接把整屏画到主目标（显式绑定 `getMainRenderTarget`），离屏拷贝只拿到部分帧，合成与 MUI 的提交竞争；`renderBackground` 也不经过，`ScreenMixin` 兜不住 | 识别 `icyllis.modernui.mc.MuiScreen`，整屏跳过（不排过渡、不画 ghost），见 `ScreenFader.isModernUiScreen` |
 | `run/config` 里改成 3000ms 但没生效 | 配置是启动时读的 | 改完重启 |
 
 ---
 
 ## 5. 兼容性
 
-- **Forge `ForgeHooksClient.drawScreen` 是 1.20.1 唯一能包住 `ScreenEvent.Render.Post` 的挂载点。**
-  换 NeoForge 1.21 时这个类不存在，需要找等价位置；退回到 `Screen#renderWithTooltip` 会重新丢掉
+- **NeoForge `ClientHooks#drawScreen` 是 1.21.1 唯一能包住 `ScreenEvent.Render.Post` 的挂载点**
+  （1.20.1 对应 `ForgeHooksClient#drawScreen`）。退回到 `Screen#renderWithTooltip` 会重新丢掉
   Post 阶段画界面的 mod（MUI 就是典型）。
 - **Modern UI 3.12.0.1** 的关键行为：
   - 界面是真正的 `Screen`（`MuiScreen` + `createScreen`），会走 `Minecraft#setScreen`；
   - `BlurHandler.drawScreenBackground` 会 `getMainRenderTarget().bindWrite(true)`，且不还原；
+  - `SimpleScreen#render` 不调用 `renderBackground`，而是 `UIManager.render` 显式绑定主目标画整屏 →
+    离屏合成无法覆盖它，所以 MUI 界面（`MuiScreen`）整体跳过过渡；
   - 有一套界面黑名单，黑名单里的界面不走模糊（所以资源包界面一直正常，可以作为对照）。
 - 任何在 `renderBackground` 里重绑 framebuffer 的 mod，都会因为第 2 节第 7 条被兜住。
-- 本项目 `build.gradle` 里还挂着 MixinExtras 的 shadow/relocate，但当前代码**没有用到**它；
-  如果要用 `@Local` 等特性，需要把 `mixinextras-forge` 真正放进运行时依赖（只 shadow 到发布 jar 是
-  加载不出来的，dev 运行会 `NoClassDefFoundError`）。
+- **视频设置页的联动按平台各写一份**（`compat/embeddium` 与 `compat/sodium`），两者都在源码树里，
+  由 `build.gradle` 的 `sourceSets.main.java.exclude` 按 `isNeo` 二选一编译：
+  - 1.21.1 Sodium：实现 `ConfigEntryPoint` 并标 `@ConfigEntryPointForge("fadescreen")`，Sodium 反射实例化；
+    `registerConfigLate` 里建页；`setStorageHandler` → `FadeConfig.save()`（`ModConfigSpec#save()`）；
+  - 1.20.1 Embeddium：`OptionGUIConstructionEvent.BUS` 监听 + `FadeConfig.save()`（`ModConfig#save()`，
+    Forge 的 `ForgeConfigSpec` 没有 `save()`，所以要把 `ModConfig` 从 mod bus 上抓下来）。
+- 依赖只在编译期：Sodium 用 `implementation("net.caffeinemc:sodium-neoforge-api:...")`，
+  Embeddium 用 `modImplementation`；都**不打进发布 jar**，缺失时对应类不会被加载。
+- `build.gradle` 里 `shadow`/`shadowJar` 还在，但当前代码**没有用到 MixinExtras**；
+  如果要用 `@Local` 等特性，需要把 mixinextras 真正放进运行时依赖（只 shadow 到发布 jar 是加载不出来的，
+  dev 运行会 `NoClassDefFoundError`）。
 
 ---
 
@@ -140,11 +154,13 @@ GameRenderer#render（每帧，GuiGraphics.flush 之后）
 
 ```toml
 enabled = true
-durationMillis = 200   # 单次过渡时长；一次切换是交叉淡化，不是淡出+淡入两段；0 关闭动画
+durationMillis = 320   # 单次过渡时长；一次切换是交叉淡化，不是淡出+淡入两段；0 关闭动画
+lowResTransition = false  # 离屏按 GUI 缩放分辨率渲染，4K 省显存，但过渡期间字会变软
 skippedScreens = []    # 全限定类名，例如 "net.minecraft.client.gui.screens.LevelLoadingScreen"
 ```
 
-`durationMillis` 是运行时每帧读的，但改文件仍需重启（Forge 配置加载时机）。
+`durationMillis` 是运行时每帧读的，但改文件仍需重启（配置加载时机）。
+装了 Sodium / Embeddium 时也可以直接在其视频设置页里改，改完会立刻写回文件。
 
 ---
 
@@ -178,12 +194,13 @@ skippedScreens = []    # 全限定类名，例如 "net.minecraft.client.gui.scre
 ## 9. 构建与部署（本机环境）
 
 ```powershell
-$env:JAVA_HOME = 'D:\ZuluJava21'          # Forge 1.20.1 需要 JDK 17+，本机用 Zulu 21 跑 Gradle
+$env:JAVA_HOME = 'D:\ZuluJava21'          # NeoForge 1.21.1 需要 JDK 21
 & "D:\ModDev\FadeScreen\gradlew.bat" -p "D:\ModDev\FadeScreen" --offline build
 ```
 
-- 产物：`build/libs/fadescreen-1.20.1-1.0.0.jar`（`remapJar` 后的正式包；`-dev-shadow.jar` 不要分发）
-- 测试实例：`C:\Users\lenovo\AppData\Roaming\PrismLauncher\instances\NarutoClient\minecraft\mods\fadescreen-1.20.1-1.0.0.jar`
+- 产物：`build/libs/fadescreen-1.21.1-1.0.0.jar`（`remapJar` 后的正式包；`-dev-shadow.jar` 不要分发）
+- 测试实例：`C:\Users\lenovo\AppData\Roaming\PrismLauncher\instances\NarutoClient\minecraft\mods\fadescreen-1.21.1-1.0.0.jar`
   （可直接覆盖，无需备份）
 - 开发运行：`gradlew runClient`；`run/config/fadescreen-client.toml` 是 dev 环境自己的配置
-- `--offline` 可用是因为本机已有完整的 Loom/Forge 缓存；换机器要去掉
+- `--offline` 可用是因为本机已有完整的 Loom/NeoForge 缓存；第一次解析新依赖（如
+  `sodium-neoforge-api`）时必须去掉 `--offline`，否则会报 `No cached version available for offline mode`
